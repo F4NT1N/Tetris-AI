@@ -402,7 +402,7 @@ model = TetrisModel()
 app_state = "human"
 
 # DROP INTERVAL est la constante de l'intervalle de temps entre chaque drop lorsque rien n'est touché
-DROP_INTERVAL = 10
+DROP_INTERVAL = 500
 
 ai_drop_interval = DROP_INTERVAL
 nb_AI_move_by_drop = 5
