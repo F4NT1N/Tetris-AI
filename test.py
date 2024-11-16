@@ -1,4 +1,3 @@
 
 
-for i in range(2,22):
-    print(i)
+print(tuple([1,1]) == tuple((1,1)))

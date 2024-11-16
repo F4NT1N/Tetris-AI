@@ -1,7 +1,6 @@
 import pygame
 import random
 
-
 # initialiser Pygame et définir la fenêtre de jeu
 width = 888
 height = 720
@@ -14,10 +13,13 @@ pygame.display.set_caption("Tetris")
 font_mega = pygame.font.Font("ressources/retro_font.ttf", 44)
 font = pygame.font.Font("ressources/retro_font.ttf", 20)
 font_legend = pygame.font.Font("ressources/retro_font.ttf", 12)
+font_mini = pygame.font.Font("ressources/retro_font.ttf", 10)
 
 # Charger les images
 background_img = pygame.image.load("ressources/TetrisBackground.png")
 sprite_sheet = pygame.image.load("ressources/Blocks.png").convert_alpha()
+reset = pygame.image.load("ressources/Reset.png")
+reset = pygame.transform.scale(reset,(30,30))
 
 # Dimensions des cellules
 CELL_SIZE = 24
@@ -71,6 +73,13 @@ Z_shape = [[1,1,0],
            
 
 PIECES = [T_shape, L_shape, O_shape, J_shape, Z_shape, S_shape, I_shape]
+PIECES_NAME = ["t", "l", "o", "j", "z", "s", "i"]
+
+def get_piece_name(piece):
+    for i, p in enumerate(PIECES):
+        if piece == p:
+            return PIECES_NAME[i]
+    
 
 # variables du modele
 GRID_WIDTH = 10
@@ -230,6 +239,23 @@ class TetrisModel():
         self.game_over = False
 
         self.piece_echanged = False
+    
+    def clone(self):
+        clone = TetrisModel()
+
+        clone.grid = self.grid
+        clone.current_piece = self.current_piece 
+        clone.current_position = self.current_position
+        clone.rotation = self.rotation
+        clone.next_piece = self.next_piece
+        clone.holded_piece = self.holded_piece
+        clone.score = self.score
+        clone.lines = self.lines
+        clone.level = self.level
+        clone.game_over = self.game_over
+        clone.piece_echanged = self.piece_echanged
+
+        return clone
 
 GRID_X = 215.5
 GRID_Y = 97
@@ -371,14 +397,66 @@ def draw_game_over():
     screen.blit(game_text_surface,game_surface_rect)
     screen.blit(over_text_surface,over_surface_rect)        
 
-
-
 def on_reset_btn(mouse_pos):
     return 73 <= mouse_pos[0] <= 127 and 392 <= mouse_pos[1] <= 446
 
 def on_AI_btn(mouse_pos):
     return 73 <= mouse_pos[0] <= 127 and 521 <= mouse_pos[1] <= 575
 
+
+inputs_DI = ["-100","-10","-1","+1","+10","+100"]
+btns_DI = [pygame.Rect(525 + i*38, 355, 30, 14) for i in range(len(inputs_DI))]
+inputs_nb = ["-10","-1","+1","+10"]
+btns_nb = [pygame.Rect(525 + i*63, 403, 30, 14) for i in range(len(inputs_nb))]
+
+def draw_AI_info(ai_drop_interval, nb_AI_move_by_drop, autorun, ai_best_score):
+    aiDI_text_surface = font_legend.render("Drop interval :              "+str(ai_drop_interval), True, (255,255,255))
+    nbAIM_text_surface = font_legend.render("Nb moves / interval :  "+str(nb_AI_move_by_drop), True, (255,255,255))
+
+    for i, input in enumerate(inputs_DI):
+        btn_text_surface = font_mini.render(input, True, (0,0,0))
+
+        pygame.draw.rect(screen, (255,255,255),btns_DI[i] , border_radius=5)
+        text_rect = btn_text_surface.get_rect(center=btns_DI[i].center)
+        screen.blit(btn_text_surface,text_rect)
+    
+    for i, input in enumerate(inputs_nb):
+        btn_text_surface = font_mini.render(input, True, (0,0,0))
+        
+        pygame.draw.rect(screen, (255,255,255),btns_nb[i] , border_radius=5)
+        text_rect = btn_text_surface.get_rect(center=btns_nb[i].center)
+        screen.blit(btn_text_surface,text_rect)
+        
+    screen.blit(aiDI_text_surface,(525,332))
+    screen.blit(nbAIM_text_surface,(525,380))
+
+    if autorun:
+        auto_text = "auto"
+    else:
+        auto_text = "!auto"
+    
+    auto_text_surface = font_mini.render(auto_text,True,(255,255,255))
+
+    screen.blit(reset,(800,328))
+    screen.blit(auto_text_surface,(798,358))
+
+    hs_text_surface = font_legend.render("best score : "+str(ai_best_score), True, (255,255,255))
+
+    screen.blit(hs_text_surface,(525,425))
+
+def on_autorun_btn(mouse_pos):
+    return 798 <= mouse_pos[0] <= 832 and 328 <= mouse_pos[1] <= 372
+
+def on_AI_info_btns(mouse_pos, ai_drop_interval, nb_AI_move_by_drop):
+    for i ,rect in enumerate(btns_DI):
+        if rect.collidepoint(mouse_pos):
+            ai_drop_interval = max(ai_drop_interval + int(inputs_DI[i]), 1)
+
+    for i, rect in enumerate(btns_nb):
+        if rect.collidepoint(mouse_pos):
+            nb_AI_move_by_drop = max(min(nb_AI_move_by_drop + int(inputs_nb[i]), ai_drop_interval), 1)
+    
+    return ai_drop_interval, nb_AI_move_by_drop
 
 AI_actions = ["hold","hard_drop","drop","move_left","move_right","rotate"]
 
@@ -407,16 +485,23 @@ DROP_INTERVAL = 500
 ai_drop_interval = DROP_INTERVAL
 nb_AI_move_by_drop = 5
 last_move_time = 0
-
+autorun = False
+ai_best_score = 0
 
 # la variable drop interval, elle, est la variable qui change selon si l'utilisateur fais une action ou non.
 drop_interval = DROP_INTERVAL
 last_drop_time = 0
 
 
+
+# ------------------------------------------------------------------ Draw ----------------------------------------------------------- #
+
 # Boucle principale du jeu
 while True:
     actual_time = pygame.time.get_ticks()
+
+    # masquer les images présentes au dernier tick
+    screen.fill((0,0,0))
 
     # detecte les touches cliquées et agit en conséquence 
     for event in pygame.event.get():
@@ -442,6 +527,10 @@ while True:
                 model.hold()
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
+                if app_state == "AI":
+                    ai_drop_interval, nb_AI_move_by_drop = on_AI_info_btns(pygame.mouse.get_pos(), ai_drop_interval, nb_AI_move_by_drop)
+                    if on_autorun_btn(pygame.mouse.get_pos()):
+                        autorun = not autorun
                 if on_reset_btn(pygame.mouse.get_pos()):
                     model.reset()
                 elif on_AI_btn(pygame.mouse.get_pos()):
@@ -450,20 +539,28 @@ while True:
                     else:
                         app_state = "AI"
                     model.reset()
-
+    
     if app_state == "AI":
+        draw_AI_info(ai_drop_interval, nb_AI_move_by_drop, autorun, ai_best_score)
+
         # demander à l'IA de choisir l'action
-        if actual_time - last_drop_time >= DROP_INTERVAL // nb_AI_move_by_drop:
-            random_move_AI(model)
+        if actual_time - last_drop_time >= ai_drop_interval // nb_AI_move_by_drop:
+            play(model)
             last_drop_time = actual_time
+            if autorun and model.game_over:
+                if model.score > ai_best_score:
+                    ai_best_score = model.score
+                model.reset()
 
     # afficher les bloques puis l'image de fond
-    screen.fill((0,0,0))
     draw_grid(model.grid)
     draw_drop_pre(model)
     draw_current_piece(model.current_piece, model.current_position)
     # si la partie est perdu, grisé la grille, et affiché game over
     if model.game_over:
+        if app_state == "ai":
+            if model.score > ai_best_score:
+                    ai_best_score = model.score
         draw_game_over()
 
     screen.blit(background_img, (0,0))
