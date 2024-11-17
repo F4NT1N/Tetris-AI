@@ -545,7 +545,7 @@ while True:
 
         # demander à l'IA de choisir l'action
         if actual_time - last_drop_time >= ai_drop_interval // nb_AI_move_by_drop:
-            play(model)
+            random_move_AI(model)
             last_drop_time = actual_time
             if autorun and model.game_over:
                 if model.score > ai_best_score:
